@@ -11,6 +11,7 @@ import csv
 import datetime
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 
@@ -19,6 +20,7 @@ class MyEconomy:
     def __init__(self, filename):
         
         # Read in dates and close from filename
+        self.filename = filename
         self.read_csv(filename)
         
         
@@ -76,8 +78,8 @@ class MyEconomy:
         dividend = 0 if dividend==None else dividend
         monthly_save = 0 if monthly_save==None else monthly_save
         
-        start_date = self.dates[0] if start_date==None else start_date
-        stop_date = self.dates[-1] if stop_date==None else stop_date
+        start_date = self.dates[0] if start_date==None else max(start_date, self.dates[0])
+        stop_date = self.dates[-1] if stop_date==None else min(stop_date, self.dates[-1])
         
         monthly_start = start_date if monthly_start==None else monthly_start
         monthly_stop = stop_date if monthly_stop==None else monthly_stop
@@ -98,7 +100,7 @@ class MyEconomy:
             
         self.capital = [capital]
         self.profit = [0]
-        self.invested = 0
+        self.invested = capital
         # Loop over dates and close to calculate capital
         for i in range(ind_start_date, ind_stop_date):
             
@@ -121,8 +123,44 @@ class MyEconomy:
             self.profit.append(next_day-capital-self.invested)
             
             
-        def sensitivity(self, start_capital, monthly_save, rate):
+    def sensitivity(self, start_capital, monthly_save, rate, plot=True):
+
+        self.profit_map = np.zeros((len(monthly_save), len(rate)))
             
+        for i in range(len(monthly_save)):
+            for k in range(len(rate)):
+                self.run(start_capital=start_capital,
+                         monthly_save=monthly_save[i],
+                         dividend=rate[k])
+                    
+                profit_yield = self.profit[-1]/1000000#/self.invested
+                self.profit_map[i,k] = profit_yield
+                
+        if plot:
+            plt.style.use("fivethirtyeight")
+            fig, ax = plt.subplots(figsize=(9,6))
+            #im = ax.imshow(self.profit_map)
+            im = sns.heatmap(self.profit_map, annot=True, cmap="coolwarm", 
+                             fmt=".1f", linewidths=0.5, cbar=False, square=True)
+            im.invert_yaxis()
+            
+            im.set_xticklabels(rate)
+            im.set_yticklabels(monthly_save)
+            plt.setp(im.get_yticklabels(), rotation=45, ha="right",
+                     rotation_mode="anchor")
+            
+            im.set_xlabel("Dividend (%)", fontsize=15)
+            im.set_ylabel("Monthly saving (Mkr)", fontsize=15)
+            
+            title = "Variation of monthly savings vs dividend\n({})".format(os.path.basename(self.filename))
+            im.set_title(title, fontsize=15)
+            
+            # Show all ticks
+            fig.tight_layout()
+            plt.show()
+                                      
+        
+        def plot(self):
             pass
 
 # TODO: case when provided start_date is earlier than first date in the csv.
@@ -131,13 +169,26 @@ def main():
     f1 = "omxs30_GI_2020-01-17.csv"
     f2 = "omxs30_1990_2019.csv"
     f3 = "OMXSBCAPGI_1996_2020.csv"
+    
     money = MyEconomy("src/" + f3)
     
+    monthly_save = np.arange(0, 10000, 1000)
+    rate = np.arange(0,10)
+    money.sensitivity(1000, monthly_save=monthly_save, rate=rate, plot=True)
+    
+    # TODO: Move below contour plot into sensitivity()
+    X, Y = np.meshgrid(rate, monthly_save)
+    fig, ax = plt.subplots()
+    im = plt.contour(X, Y, money.profit_map, levels=10, cmap="coolwarm")
+    plt.show()
+    """
     money.run(start_capital=500000,
-          start_date=datetime.date(1995,12,31),
+          start_date=datetime.date(1990,12,31),
           #monthly_start=datetime.date(1990,9,1),
           #monthly_stop=datetime.date(2006,8,1),
           monthly_save=5000,)
+    """
+    
     return money
 
 if __name__ == '__main__':
